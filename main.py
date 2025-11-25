@@ -21,6 +21,7 @@ from telebot.apihelper import ApiTelegramException
 import time
 import requests
 
+
 bot = telebot.TeleBot(BOT_TOKEN)
 last_edited = {}
 SUPPORTED_YT_HOSTS = {
@@ -47,6 +48,7 @@ LOGIN_HELP_TEXT = (
     "2. Or run `yt-dlp --cookies-from-browser chrome` (or your browser name) to dump cookies.\n"
     "Send the exported text file contents back to me using /login."
 )
+BLACKLISTED_DOMAINS = {d.strip() for d in getattr(config, 'blacklisted_domains', '').split(',') if d.strip()}  # Load from config or .env
 
 
 def nextcloud_enabled() -> bool:
@@ -252,6 +254,13 @@ def youtube_url_validation(url):
     return YOUTUBE_REGEX.match(url)
 
 
+# Define is_youtube to check if the URL belongs to a YouTube domain
+def is_youtube(url):
+    url_info = urlparse(url)
+    netloc = url_info.netloc.lower()
+    return netloc in SUPPORTED_YT_HOSTS
+
+
 @bot.message_handler(commands=['start', 'help'])
 def test(message):
     if not ensure_authorized(message):
@@ -273,10 +282,14 @@ def download_video(message, url, audio=False, format_id="bestvideo+bestaudio"):
 
     netloc = url_info.netloc.lower()
 
-    if netloc in SUPPORTED_YT_HOSTS:
-        if not youtube_url_validation(url):
-            bot.reply_to(message, 'Invalid URL')
-            return
+    # Check if the domain is blacklisted
+    if netloc in BLACKLISTED_DOMAINS or any(netloc.endswith('.' + blacklisted) for blacklisted in BLACKLISTED_DOMAINS):
+        bot.reply_to(message, f"Downloads from {netloc} are not allowed.")
+        return
+
+    # Check if the URL is a YouTube URL
+    is_youtube = netloc in SUPPORTED_YT_HOSTS
+
 
     msg = bot.reply_to(message, 'Downloading...')
     progress_key = f"{message.chat.id}-{msg.message_id}"
@@ -349,7 +362,9 @@ def download_video(message, url, audio=False, format_id="bestvideo+bestaudio"):
             'preferredcodec': 'mp3',
         }]
 
-    if COOKIES_PATH.exists() and COOKIES_PATH.stat().st_size > 0:
+    # Use cookies for all sites by default, unless cookies_youtube_only is set in config
+    cookies_youtube_only = getattr(config, 'cookies_youtube_only', False)
+    if ((cookies_youtube_only and is_youtube) or (not cookies_youtube_only)) and COOKIES_PATH.exists() and COOKIES_PATH.stat().st_size > 0:
         ydl_opts['cookiefile'] = str(COOKIES_PATH)
 
     if getattr(config, 'use_netrc', False):

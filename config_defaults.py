@@ -29,7 +29,7 @@ DEFAULT_NEXTCLOUD_SHARE_PASSWORD: str | None = None
 DEFAULT_NEXTCLOUD_SHARE_LABEL: str | None = None
 DEFAULT_NEXTCLOUD_PUBLIC_UPLOAD = False
 DEFAULT_NEXTCLOUD_PERMISSIONS = 1
-
+DEFAULT_BLACKLISTED_DOMAINS = ""
 
 def _env_int(var_name: str, default: int | None = None) -> int | None:
     raw = os.getenv(var_name)
@@ -102,3 +102,6 @@ for value in admin_id_values:
         continue
 
 # (Validation for token removed; handled in main.py)
+
+# Added default and environment variable support for blacklisted domains
+blacklisted_domains = os.getenv("BOT_BLACKLISTED_DOMAINS", DEFAULT_BLACKLISTED_DOMAINS)
